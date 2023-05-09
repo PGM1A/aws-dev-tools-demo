@@ -37,7 +37,7 @@ export class MyVpcStack extends cdk.Stack {
             ],
             vpcName: `${CONSTANT.ENVIRONMENT_PREFIX}-vpc`,
         });
-        this.myVPC.applyRemovalPolicy(config.get('defaultremovalpolicy'));
+        this.myVPC.applyRemovalPolicy(config.get('defaultRemovalPolicy'));
 
         // Step2: Re-tagging for publicSubnets
         for (const publicSubnet of this.myVPC.publicSubnets) {

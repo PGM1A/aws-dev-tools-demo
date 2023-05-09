@@ -1,12 +1,28 @@
 {
     "env": "Demo",
+    "projectName": "my-app",
+    "authorTagValue": "nbkhoi",
+    "purposeTagValue": "demo",
     "vpc": {
         "cidr": "12.0.0.0/16",
-        "maxnatgateways": 0,
+        "maxnatgateways": 1,
         "maxazs": 2,
         "subnet": {
             "cidrmask": 28
         }
     },
-    "defaultremovalpolicy": "destroy"
+    "codebuild": {
+        "githubCredentialTokenSecretName": "github/pat/nbkhoi"        
+    },
+    "artifactS3Bucket": {
+        "autoDeleteObjects": true,
+        "publicReadAccess": false,
+        "blockPublicAccess": {
+            "blockPublicAcls": true,
+            "blockPublicPolicy": true,
+            "ignorePublicAcls": true,
+            "restrictPublicBuckets": true
+        }
+    },
+    "defaultRemovalPolicy": "destroy"
 }
