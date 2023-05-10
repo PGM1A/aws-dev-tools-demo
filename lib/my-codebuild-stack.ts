@@ -8,8 +8,6 @@ import * as CONSTANT from './constant';
 
 import config = require('config');
 import { MyVpcStack } from './my-vpc-stack';
-import { SecretValue } from 'aws-cdk-lib';
-import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 
 
 export interface MyCodeBuildStackProps extends cdk.StackProps {
@@ -34,11 +32,12 @@ export class MyCodeBuildStack extends cdk.Stack {
             assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com')
         });
         myCbRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('SecretsManagerReadWrite'));
+        myCbRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AWSCodeBuildDeveloperAccess'));
         myCbRole.applyRemovalPolicy(config.get('defaultRemovalPolicy'));
 
         // Create credential for GitHub
         new codebuild.GitHubSourceCredentials(this, 'MyCodeBuildGitHubCreds', {
-            accessToken: SecretValue.secretsManager(config.get<string>('codebuild.githubCredentialTokenSecretName')),
+            accessToken: cdk.SecretValue.secretsManager(config.get<string>('codebuild.githubCredentialTokenSecretName')),
         });
 
         // create CodeBuild Source
