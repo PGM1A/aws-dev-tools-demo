@@ -10,14 +10,81 @@ import * as CONSTANT from './constant';
 
 import config = require('config');
 import { MyVpcStack } from './my-vpc-stack';
-import { MyCodeBuildStack } from './my-codebuild-stack';
+import { Effect, PolicyStatement } from 'aws-cdk-lib/aws-iam';
 
 export class MyCodePipelineStack extends cdk.Stack {
     constructor(scope: Construct, id: string, props?: cdk.StackProps) {
         super(scope, id, props);
         const myVpc = new MyVpcStack(this, 'MyVpcStack', {}).myVPC as ec2.IVpc;
         const projectName = config.get<string>('projectName');
+        // Create CodePipeline Role
+        const myCplPolicy = new iam.ManagedPolicy(this, 'MyCodePipelineRolePolicy', {
+            managedPolicyName: `${CONSTANT.ENVIRONMENT_PREFIX}-${projectName}-cpl-role`,
+            statements: [
+                new PolicyStatement({
+                    effect: Effect.ALLOW,
+                    actions: ['iam:PassRole'],
+                    resources: ['*'],
+                    conditions: {
+                        StringEqualsIfExists: {
+                            'iam:PassedToService': [
+                                'cloudformation.amazonaws.com',
+                                'elasticbeanstalk.amazonaws.com',
+                                'ec2.amazonaws.com',
+                                'ecs-tasks.amazonaws.com'
+                            ]
+                        }
+                    }
+                }),
+                new PolicyStatement({
+                    effect: Effect.ALLOW,
+                    actions: ['codestar-connections:UseConnection'],
+                    resources: ['*']
+                }),
+                new PolicyStatement({
+                    effect: Effect.ALLOW,
+                    actions: [
+                        'elasticbeanstalk:*',
+                        'ec2:*',
+                        'elasticloadbalancing:*',
+                        'autoscaling:*',
+                        'cloudwatch:*',
+                        's3:*',
+                        'sns:*',
+                        'cloudformation:*',
+                        'rds:*',
+                        'sqs:*',
+                        'ecs:*'
+                    ],
+                    resources: ['*']
+                }),
+                new PolicyStatement({
+                    effect: Effect.ALLOW,
+                    actions: [
+                        'codebuild:BatchGetBuilds',
+                        'codebuild:StartBuild',
+                        'codebuild:BatchGetBuildBatches',
+                        'codebuild:StartBuildBatch'
+                    ],
+                    resources: ['*']
+                }),
+            ]
+        });
+        const myCplRole = new iam.Role(this, "MyCodePipelineRole", {
+            roleName: `${CONSTANT.ENVIRONMENT_PREFIX}-${projectName}-cpl-role`,
+            assumedBy: new iam.ServicePrincipal("codepipeline.amazonaws.com"),
+            managedPolicies: [
+                myCplPolicy
+            ]
+        });
 
+        // Create code build
+        const myCbRole = new iam.Role(this, 'MyCbRole', {
+            roleName: `${CONSTANT.ENVIRONMENT_PREFIX}-${projectName}-cb-role`,
+            assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com')
+        });
+        myCbRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('SecretsManagerReadWrite'));
+        myCbRole.applyRemovalPolicy(config.get('defaultRemovalPolicy'));
         // Create code pipelines
         const mySourceOutput = new codepipeline.Artifact('MySourceOutput');
 
@@ -39,11 +106,13 @@ export class MyCodePipelineStack extends cdk.Stack {
                 privileged: true,
                 computeType: codebuild.ComputeType.SMALL,
             },
+            role: myCbRole,
             vpc: myVpc,
             subnetSelection: {
                 subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
             }
         });
+
         myCbProject.applyRemovalPolicy(config.get('defaultRemovalPolicy'));
 
         const myBuildOutput = new codepipeline.Artifact('MyBuildOutput');
@@ -60,6 +129,7 @@ export class MyCodePipelineStack extends cdk.Stack {
 
         // Create CodePipelines
         const myCodePipelines = new codepipeline.Pipeline(this, 'MyCodePipeline', {
+            role: myCplRole,
             pipelineName: `${CONSTANT.ENVIRONMENT_PREFIX}-${projectName}-cpl`,
             stages: [
                 {

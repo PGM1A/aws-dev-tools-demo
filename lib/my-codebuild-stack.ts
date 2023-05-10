@@ -32,7 +32,6 @@ export class MyCodeBuildStack extends cdk.Stack {
             assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com')
         });
         myCbRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('SecretsManagerReadWrite'));
-        myCbRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('AWSCodeBuildDeveloperAccess'));
         myCbRole.applyRemovalPolicy(config.get('defaultRemovalPolicy'));
 
         // Create credential for GitHub
