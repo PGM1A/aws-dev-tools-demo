@@ -11,17 +11,15 @@ import { MyVpcStack } from './my-vpc-stack';
 
 
 export interface MyCodeBuildStackProps extends cdk.StackProps {
-    vpcname?: string
+    vpc?: ec2.IVpc
 };
 
 export class MyCodeBuildStack extends cdk.Stack {
     myVpc: ec2.IVpc;
     constructor(scope: Construct, id: string, props?: MyCodeBuildStackProps) {
         super(scope, id, props);
-        if (props?.vpcname != null) {
-            this.myVpc = ec2.Vpc.fromLookup(this, 'MyVpcStack', {
-                vpcName: props.vpcname,
-            });
+        if (props?.vpc != null) {
+            this.myVpc = props.vpc;
         } else {
             this.myVpc = new MyVpcStack(this, 'MyVpcStack', {}).myVPC as ec2.IVpc;
         }
