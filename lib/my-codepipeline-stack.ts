@@ -89,11 +89,48 @@ export class MyCodePipelineStack extends cdk.Stack {
             ]
         });
 
+        // Create CodeDeploy Role
+        const myCdPolicy = new iam.ManagedPolicy(this, 'MyCodeDeployRolePolicy', {
+            managedPolicyName: `${CONSTANT.ENVIRONMENT_PREFIX}-${projectName}-cd-role`,
+            statements: [
+                new PolicyStatement({
+                    effect: Effect.ALLOW,
+                    actions: [
+                        "apigateway:*",
+                        "codedeploy:*",
+                        "lambda:*",
+                        "cloudformation:CreateChangeSet",
+                        "iam:GetRole",
+                        "iam:CreateRole",
+                        "iam:DeleteRole",
+                        "iam:PutRolePolicy",
+                        "iam:AttachRolePolicy",
+                        "iam:DeleteRolePolicy",
+                        "iam:DetachRolePolicy",
+                        "iam:PassRole",
+                        "s3:GetObject",
+                        "s3:GetObjectVersion",
+                        "s3:GetBucketVersioning"
+                    ],
+                    resources: ['*']
+                })
+            ]
+        });
+        const myCdRole = new iam.Role(this, "MyCodeDeployRole", {
+            roleName: `${CONSTANT.ENVIRONMENT_PREFIX}-${projectName}-cd-role`,
+            assumedBy: new iam.ServicePrincipal("cloudformation.amazonaws.com"),
+            managedPolicies: [
+                iam.ManagedPolicy.fromAwsManagedPolicyName('AWSLambdaExecute'),
+                myCdPolicy
+            ]
+        });
+
         // Create code build role
         const myCbRole = new iam.Role(this, 'MyCbRole', {
             roleName: `${CONSTANT.ENVIRONMENT_PREFIX}-${projectName}-cb-role`,
             assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com')
         });
+        myCbRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('SecretsManagerReadWrite'));
         myCbRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('SecretsManagerReadWrite'));
         myCbRole.applyRemovalPolicy(config.get('defaultRemovalPolicy'));
         // Create code pipelines role
@@ -118,15 +155,30 @@ export class MyCodePipelineStack extends cdk.Stack {
             branch: 'develop',
             output: mySourceOutput,
         });
+        // Create a new s3 bucket to store the AWS CloudFormation template
+        const myCfnTplS3Bucket = new s3.Bucket(this, "MyCfnTplBucket", {
+            bucketName: CONSTANT.CLOUDFORMATION_TEMPLATE_S3_BUCKET_NAME,
+            removalPolicy: config.get('defaultRemovalPolicy'),
+            autoDeleteObjects: config.get('cfnTplS3Bucket.autoDeleteObjects'),
+            publicReadAccess: config.get('cfnTplS3Bucket.publicReadAccess'),
+            blockPublicAccess: new s3.BlockPublicAccess({
+                blockPublicAcls: config.get('cfnTplS3Bucket.blockPublicAccess.blockPublicAcls'),
+                blockPublicPolicy: config.get('cfnTplS3Bucket.blockPublicAccess.blockPublicPolicy'),
+                ignorePublicAcls: config.get('cfnTplS3Bucket.blockPublicAccess.ignorePublicAcls'),
+                restrictPublicBuckets: config.get('cfnTplS3Bucket.blockPublicAccess.restrictPublicBuckets'),
+            })
+        });
+        myCfnTplS3Bucket.grantReadWrite(myCbRole);
 
         // Create CodeBuild Project
         const myCbProject = new codebuild.PipelineProject(this, 'MyCbProject', {
             projectName: `${CONSTANT.ENVIRONMENT_PREFIX}-${projectName}`,
             buildSpec: codebuild.BuildSpec.fromSourceFilename('buildspec.yml'),
+            // buildSpec: codebuild.BuildSpec.fromObject(this.getBuildSpecContent()),
             environment: {
                 buildImage: codebuild.LinuxBuildImage.AMAZON_LINUX_2_3,
                 privileged: true,
-                computeType: codebuild.ComputeType.SMALL
+                computeType: codebuild.ComputeType.SMALL,
             },
             role: myCbRole,
             vpc: this.myVpc,
@@ -156,7 +208,35 @@ export class MyCodePipelineStack extends cdk.Stack {
             input: mySourceOutput,
             extraInputs: [mySourceOutput],
             project: myCbProject,
+            environmentVariables: {
+                BUCKET: {
+                    value: CONSTANT.CLOUDFORMATION_TEMPLATE_S3_BUCKET_NAME
+                } 
+            },
             outputs: [myBuildOutput]
+        });
+
+        const changeSetName = 'StagedChangeSet';
+        const stackName = 'hello-world-lambda-ts';
+        const createReplaceChangeSetAction = new cplAction.CloudFormationCreateReplaceChangeSetAction({
+            actionName: "PrepareChanges",
+            stackName: stackName,
+            changeSetName: changeSetName,
+            templatePath: myBuildOutput.atPath('outputtemplate.yml'),
+            cfnCapabilities: [
+                cdk.CfnCapabilities.NAMED_IAM,
+                cdk.CfnCapabilities.AUTO_EXPAND
+            ],
+            adminPermissions: false,
+            deploymentRole: myCdRole,
+            runOrder: 1
+        });
+
+        const executeChangeSetAction = new  cplAction.CloudFormationExecuteChangeSetAction({
+            actionName: "ExecuteChanges",
+            changeSetName:changeSetName,
+            stackName: stackName,
+            runOrder: 2
         });
 
         // Create CodePipelines
@@ -175,10 +255,13 @@ export class MyCodePipelineStack extends cdk.Stack {
                     actions: [myBuildAction]
                 },
                 // Add Deploy state
-                // {
-                //     stageName: 'Deploy',
-                //     actions: [myDeployAction]
-                // }
+                {
+                    stageName: 'Deploy',
+                    actions: [
+                        createReplaceChangeSetAction,
+                        executeChangeSetAction
+                    ]
+                }
             ]
         });
         const pipelineCfn = myCodePipelines.node.defaultChild as cdk.CfnResource;
@@ -201,4 +284,42 @@ export class MyCodePipelineStack extends cdk.Stack {
         );
 
     }
+    // private getBuildSpecContent(): { [key: string]: any; } {
+    //     return {
+    //         version: '0.2',
+    //         env: {
+    //             variables: {
+    //                 BUCKET: CONSTANT.CLOUDFORMATION_TEMPLATE_S3_BUCKET_NAME
+    //             }
+    //         },
+    //         phases: {
+    //             install: {
+    //                 'runtime-versions': {
+    //                     nodejs: '12'
+    //                 }
+    //             },
+    //             pre_build: {
+    //                 commands: [
+    //                     'echo build start'
+    //                 ]
+    //             },
+    //             build: {
+    //                 commands: [
+    //                     'echo Build started on `date`',
+    //                     'echo Build started on `date`',
+    //                     'sam build',
+    //                     'sam package --s3-bucket $BUCKET --output-template-file outputtemplate.yml',
+    //                     'echo Build completed on `date`'
+    //                 ]
+    //             }
+    //         },
+    //         artifacts: {
+    //             type: 'zip',
+    //             files: [
+    //                 'template.yml',
+    //                 'outputtemplate.yml'
+    //             ]
+    //         }
+    //     };
+    // }
 }

@@ -1,6 +1,6 @@
 {
     "env": "Demo",
-    "projectName": "my-app",
+    "projectName": "hello-world-lambda-ts",
     "authorTagValue": "nbkhoi",
     "purposeTagValue": "demo",
     "vpc": {
@@ -15,6 +15,18 @@
         "githubCredentialTokenSecretName": "github/pat/nbkhoi"        
     },
     "artifactS3Bucket": {
+        "name": "development-tool-artifacts",
+        "autoDeleteObjects": true,
+        "publicReadAccess": false,
+        "blockPublicAccess": {
+            "blockPublicAcls": true,
+            "blockPublicPolicy": true,
+            "ignorePublicAcls": true,
+            "restrictPublicBuckets": true
+        }
+    },
+    "cfnTplS3Bucket": {
+        "name": "cfn-template-storage",
         "autoDeleteObjects": true,
         "publicReadAccess": false,
         "blockPublicAccess": {
