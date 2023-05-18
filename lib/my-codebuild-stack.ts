@@ -7,7 +7,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as CONSTANT from './constant';
 
 import config = require('config');
-import { MyVpcStack } from './my-vpc-stack';
+import { Vpc } from './my-vpc-stack';
 
 
 export interface MyCodeBuildStackProps extends cdk.StackProps {
@@ -21,12 +21,12 @@ export class MyCodeBuildStack extends cdk.Stack {
         if (props?.vpc != null) {
             this.myVpc = props.vpc;
         } else {
-            this.myVpc = new MyVpcStack(this, 'MyVpcStack', {}).myVPC as ec2.IVpc;
+            this.myVpc = new Vpc(scope, 'MyVpcStack').myVPC as ec2.IVpc;
         }
         const projectName = config.get<string>('projectName');
         // Create code build
         const myCbRole = new iam.Role(this, 'MyCbRole', {
-            roleName: `${CONSTANT.ENVIRONMENT_PREFIX}-${projectName}-cb-role`,
+            roleName: `${CONSTANT.ENVIRONMENT.charAt(0) + CONSTANT.ENVIRONMENT.slice(1)}-${projectName}-cb-role`,
             assumedBy: new iam.ServicePrincipal('codebuild.amazonaws.com')
         });
         myCbRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('SecretsManagerReadWrite'));
@@ -74,7 +74,7 @@ export class MyCodeBuildStack extends cdk.Stack {
             bucket: myArtifactS3Bucket,
             includeBuildId: false,
             packageZip: true,
-            path: CONSTANT.ENVIRONMENT_NAME,
+            path: CONSTANT.ENVIRONMENT.charAt(0) + CONSTANT.ENVIRONMENT.slice(1).charAt(0).toUpperCase() + CONSTANT.ENVIRONMENT.charAt(0) + CONSTANT.ENVIRONMENT.slice(1).slice(1),
             encryption: true
         });
 
@@ -93,7 +93,7 @@ export class MyCodeBuildStack extends cdk.Stack {
                 subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
             },
             role: myCbRole,
-            projectName: `${CONSTANT.ENVIRONMENT_PREFIX}-${projectName}`,
+            projectName: `${CONSTANT.ENVIRONMENT.charAt(0) + CONSTANT.ENVIRONMENT.slice(1)}-${projectName}`,
         });
         myCbProject.applyRemovalPolicy(config.get('defaultRemovalPolicy'));
 
@@ -105,7 +105,7 @@ export class MyCodeBuildStack extends cdk.Stack {
             new cdk.Tag('purpose', CONSTANT.PURPOSE_TAG_VALUE)
         );
         cdk.Aspects.of(myArtifactS3Bucket).add(
-            new cdk.Tag('env', CONSTANT.ENVIRONMENT_NAME)
+            new cdk.Tag('env', CONSTANT.ENVIRONMENT.charAt(0) + CONSTANT.ENVIRONMENT.slice(1))
         );
         // Tags for CodeBuild Project
         cdk.Aspects.of(myCbProject).add(
@@ -115,7 +115,7 @@ export class MyCodeBuildStack extends cdk.Stack {
             new cdk.Tag('purpose', CONSTANT.PURPOSE_TAG_VALUE)
         );
         cdk.Aspects.of(myCbProject).add(
-            new cdk.Tag('env', CONSTANT.ENVIRONMENT_NAME)
+            new cdk.Tag('env', CONSTANT.ENVIRONMENT.charAt(0) + CONSTANT.ENVIRONMENT.slice(1))
         );
 
     }

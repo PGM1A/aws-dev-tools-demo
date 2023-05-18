@@ -20,7 +20,7 @@ export class MyCodeCommitStack extends cdk.Stack {
             new cdk.Tag('purpose', CONSTANT.PURPOSE_TAG_VALUE)
         );
         cdk.Aspects.of(repo).add(
-            new cdk.Tag('env', CONSTANT.ENVIRONMENT_NAME)
+            new cdk.Tag('env', CONSTANT.ENVIRONMENT.charAt(0) + CONSTANT.ENVIRONMENT.slice(1))
         );
     };
 

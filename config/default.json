@@ -1,6 +1,7 @@
 {
-    "env": "Demo",
-    "projectName": "hello-world-lambda-ts",
+    "env": "demo",
+    "nodeEnv": "production",
+    "projectName": "sam-serverless-api",
     "authorTagValue": "nbkhoi",
     "purposeTagValue": "demo",
     "vpc": {
